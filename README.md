@@ -79,3 +79,11 @@ omarchy plugin remove io.github.archer-clawbot.hermes-harness
 ```
 
 No system rollback is necessary.
+
+Local launch actions stay unavailable until a complete status object and a
+successful command exit confirm local mode. During refresh or after a failed
+refresh, launch remains unavailable. The status lifecycle tests run with Qt 6:
+
+```bash
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml
+```

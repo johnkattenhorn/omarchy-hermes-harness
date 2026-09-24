@@ -2,7 +2,7 @@
 
 ## Overview
 
-`scripts/hermes-status` writes exactly one JSON object to stdout. `Panel.qml` treats that object as display-only status.
+`scripts/hermes-status` writes exactly one JSON object to stdout. The input record must contain exactly one complete object; trailing garbage and additional JSON values invalidate the whole record. `Panel.qml` treats that object as display-only status.
 
 The output is intentionally compatible with an existing Omarchy Hermes provider record: unknown fields from that record are preserved, while the adapter refreshes the MVP fields it owns.
 
@@ -17,8 +17,8 @@ The output is intentionally compatible with an existing Omarchy Hermes provider 
 | `currentSessionId` | string | base record | Published session identifier |
 | `currentSessionTitle` | string | base record | Published session/task label |
 | `hermesNodeAvailable` | boolean | `command -v hermes-node`, or the record in remote mode | Optional node wrapper exists |
-| `nodesOnline` | integer | live node status or base record | Online-node count, 0 to 65536 |
-| `nodesTotal` | integer | live node status or base record | Known-node count, 0 to 65536 |
+| `nodesOnline` | integer | final validated node map | Number of nodes with `online: true` |
+| `nodesTotal` | integer | final validated node map | Number of node aliases |
 | `nodes` | object | live node status or base record | Validated map keyed by node alias |
 | `remote` | boolean | base record, strict JSON `true` only | Hermes runs on another host |
 | `remoteStale` | boolean | local freshness policy | The remote record is past its permitted lifetime |
@@ -67,9 +67,9 @@ Any other value, including the string `"true"`, `1`, `null`, or an object, leave
 | `collectedAtEpoch` | finite number, floored, 0 to 4102444800 | treated as absent, so the record is stale |
 | `staleAfterSec` | finite number, floored, clamped to 1 to 900 | local default of 300 |
 | `nodes` | object whose keys match `[A-Za-z0-9._-]{1,64}` and whose values are objects | entry dropped, or the whole map replaced by `{}` |
-| `nodesOnline`, `nodesTotal` | finite number, floored, clamped to 0 to 65536 | count derived from the validated node map |
+| `nodesOnline`, `nodesTotal` | published values are ignored | counts derived from the validated node map |
 
-`nodesOnline` is additionally clamped to `nodesTotal`.
+Node counts always describe the returned `nodes` map.
 
 ### Node-probe suppression
 
@@ -144,11 +144,11 @@ It accepts lines matching:
 <node-alias>: offline
 ```
 
-Other output is ignored. If at least one matching line is returned, that live set replaces the cached node map. If no lines match, the adapter falls back to cached `nodes`, `nodesOnline`, and `nodesTotal` values.
+Other output is ignored. If at least one matching line is returned, that live set replaces the cached node map. If no lines match, the adapter falls back to the validated cached `nodes` map. Repeated aliases use the last reported state. Both counters are derived from the final map.
 
 The 18-second outer timeout and 64 KiB output ceiling bound the aggregate status call before output reaches a shell variable. Node aliases must match `[A-Za-z0-9._-]{1,64}`. Any timeout internal to `hermes-node` remains the responsibility of that command.
 
-A node map that comes from the record rather than from a live probe is validated the same way before use: `nodes` must be an object, each key must match the alias pattern, each value must be an object, `online` is reduced to a strict boolean, and at most 256 entries are carried through. A `nodes` value of the wrong type becomes `{}` rather than contributing a length; published counters are floored, clamped, and fall back to counts derived from the validated map.
+A node map that comes from the record rather than from a live probe is validated the same way before use: `nodes` must be an object, each key must match the alias pattern, each value must be an object, `online` is reduced to a strict boolean, and at most 256 entries are carried through. A `nodes` value of the wrong type becomes `{}` rather than contributing a length; published counters are ignored.
 
 ## Freshness and interpretation
 

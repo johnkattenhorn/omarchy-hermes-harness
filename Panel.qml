@@ -12,8 +12,9 @@ Panel {
 
   property var anchorItem: null
   property var hostWidget: null
-  property var status: ({ installed: false, version: "", gatewayState: "unknown", activeModel: "", currentSessionId: "", currentSessionTitle: "", hermesNodeAvailable: false, nodesOnline: 0, nodesTotal: 0, nodes: {}, remote: false, remoteStale: false })
-  property string lastError: ""
+  StatusState { id: statusState }
+  readonly property var status: statusState.status
+  readonly property string lastError: statusState.lastError
   readonly property var barIdentity: hostWidget || root
   readonly property bool gatewayActive: status.gatewayState === "active"
   // A remote record describes a Hermes on another host. There is no local
@@ -21,7 +22,7 @@ Panel {
   // rather than left to fail against a command that does not exist.
   readonly property bool remote: status.remote === true
   readonly property bool remoteStale: status.remoteStale === true
-  readonly property bool canLaunchLocally: !remote
+  readonly property bool canLaunchLocally: statusState.canLaunchLocally
   readonly property int refreshSeconds: Math.max(10, parseInt(setting("refreshIntervalSec", 15), 10) || 15)
   readonly property string barLabel: status.installed ? (gatewayActive ? "⚕" : "⚕·") : "⚕×"
 
@@ -31,7 +32,10 @@ Panel {
   }
 
   function refresh() {
-    if (!statusProc.running) statusProc.running = true
+    if (!statusProc.running) {
+      statusState.begin()
+      statusProc.running = true
+    }
   }
 
   function open() {
@@ -54,22 +58,12 @@ Panel {
     return false
   }
 
-  function acceptStatus(raw) {
-    try {
-      var parsed = JSON.parse(String(raw || ""))
-      if (!parsed || typeof parsed !== "object") throw new Error("status is not an object")
-      status = parsed
-      lastError = ""
-    } catch (error) {
-      lastError = "Status refresh failed"
-    }
-  }
 
   Process {
     id: statusProc
     command: ["bash", Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.archer-clawbot.hermes-harness/scripts/hermes-status"]
-    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.acceptStatus(text) }
-    onExited: function(exitCode) { if (exitCode !== 0) root.lastError = "Status command exited " + exitCode }
+    stdout: StdioCollector { waitForEnd: true; onStreamFinished: statusState.receive(text) }
+    onExited: function(exitCode) { statusState.finish(exitCode) }
   }
 
   Timer {
